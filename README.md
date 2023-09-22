@@ -17,3 +17,9 @@ To start the server, run the following command from main directory:
 
 To start the client, run the following command from main directory:
 `go run ./client `
+
+## Security
+
+- The application enforces TLS encryption to secure communication between clients and the server.
+- Client certificates are required for authentication, ensuring secure connections.
+- Shell command execution on the server is sandboxed and restricted to a limited CPU time.
