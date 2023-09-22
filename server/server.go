@@ -24,7 +24,7 @@ const (
 	CERT_FILE = "./cert/server-cert.pem"
 	KEY_FILE  = "./cert/server-key.pem"
 	CA_FILE   = "./cert/ca-cert.pem"
-	TIMEOUT   = 10 * time.Second // client timeouts after 100 seconds from connection start
+	TIMEOUT   = 100 * time.Second // client timeouts after 100 seconds from connection start
 )
 
 type Server struct {
