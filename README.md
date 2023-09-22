@@ -11,9 +11,9 @@ The remote-shell application allows clients to connect to a server over a secure
 ### Starting the Server
 
 To start the server, run the following command from main directory:
-go run ./server
+`go run ./server `
 
 ### Starting the Client
 
 To start the client, run the following command from main directory:
-go run ./client
+`go run ./client `
