@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -18,13 +17,13 @@ import (
 )
 
 const (
-	HOST      = "localhost"
-	PORT      = "12345"
-	TYPE      = "tcp"
-	CERT_FILE = "./cert/server-cert.pem"
-	KEY_FILE  = "./cert/server-key.pem"
-	CA_FILE   = "./cert/ca-cert.pem"
-	TIMEOUT   = 100 * time.Second // client timeouts after 100 seconds from connection start
+	host           = "localhost"
+	port           = "12345"
+	connectionType = "tcp"
+	certFile       = "./cert/server-cert.pem"
+	keyFile        = "./cert/server-key.pem"
+	caFile         = "./cert/ca-cert.pem"
+	timeout        = 100 * time.Second // client timeouts after 100 seconds from connection start
 )
 
 type Server struct {
@@ -37,16 +36,14 @@ type Server struct {
 func NewServer(address string) (*Server, error) {
 	tlsConfig, err := LoadCertificates()
 	if err != nil {
-		log.Printf("Error loading certificates: %v", err)
 		return nil, err
 	}
 
-	listener, err := tls.Listen(TYPE, address, tlsConfig)
+	listener, err := tls.Listen(connectionType, address, tlsConfig)
 	if err != nil {
-		log.Printf("Error while creating listener: %v", err)
 		return nil, err
 	}
-	fmt.Println("Server is listening on:", address)
+	log.Println("Server is listening on:", address)
 
 	return &Server{
 		listener:   listener,
@@ -56,15 +53,13 @@ func NewServer(address string) (*Server, error) {
 }
 
 func LoadCertificates() (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(CERT_FILE, KEY_FILE)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.Printf("Error while loading certificate and key: %v", err)
 		return nil, err
 	}
 
-	authority, err := os.ReadFile(CA_FILE)
+	authority, err := os.ReadFile(caFile)
 	if err != nil {
-		log.Printf("Error loading CA certificate: %v", err)
 		return nil, err
 	}
 
@@ -90,7 +85,7 @@ func (s *Server) AcceptConnections() {
 			if err != nil {
 				continue
 			}
-			fmt.Println("New connection established from:", conn.RemoteAddr())
+			log.Println("New connection established from:", conn.RemoteAddr())
 			s.connection <- conn
 		}
 	}
@@ -112,7 +107,7 @@ func (s *Server) handleConnections() {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	scanner := bufio.NewScanner(conn)
@@ -128,13 +123,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 			// Continue handling commands
 			command := scanner.Text()
 			if command == "exit" {
-				fmt.Printf("Connection from %s closed\n", conn.RemoteAddr())
+				log.Printf("Connection from %s closed\n", conn.RemoteAddr())
 				return
 			}
 
 			// Execute the command and send output to the client
 			if err := s.executeCommand(conn, command); err != nil {
-				fmt.Printf("Error executing command: %v\n", err)
+				log.Printf("Error executing command: %v\n", err)
 				conn.Write([]byte("Error executing command:" + err.Error() + "\n"))
 				conn.Write([]byte("EOF\n"))
 			}
@@ -144,14 +139,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	scannerErr := scanner.Err()
 	if scannerErr != nil {
-		fmt.Println("Error while reading incoming message:", scannerErr)
+		log.Println("Error while reading incoming message:", scannerErr)
 	}
 }
 
 func (s *Server) handleTimeout(conn net.Conn) {
-	fmt.Fprintln(conn, "Client session duration exceeded. Disconnecting...")
+	conn.Write([]byte("Client session duration exceeded. Disconnecting...\n"))
 	conn.Write([]byte("TERMINATE\n"))
-	fmt.Printf("Client (%s) session duration exceeded\n", conn.RemoteAddr())
+	log.Printf("Client (%s) session duration exceeded\n", conn.RemoteAddr())
 }
 
 func (s *Server) executeCommand(conn net.Conn, command string) error {
@@ -161,7 +156,6 @@ func (s *Server) executeCommand(conn net.Conn, command string) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
-
 	ulimitCmd := exec.Command("sh", "-c", "ulimit -t 5; exec \"$@\"", "--", command)
 	ulimitCmd.SysProcAttr = cmd.SysProcAttr
 
@@ -184,7 +178,7 @@ func (s *Server) executeCommand(conn net.Conn, command string) error {
 
 	if err := ulimitCmd.Wait(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("Command exited with status: %v", exitErr)
+			return exitErr
 		}
 	}
 
@@ -214,17 +208,16 @@ func (s *Server) Stop() {
 	case <-done:
 		return
 	case <-time.After(time.Second):
-		fmt.Println("Connection timed out")
+		log.Println("Connection timed out")
 		return
 	}
 }
 
 func main() {
 
-	server, err := NewServer(HOST + ":" + PORT)
+	server, err := NewServer(host + ":" + port)
 	if err != nil {
 		log.Fatalf("Error creating server: %v", err)
-		os.Exit(1)
 	}
 
 	server.Start()
@@ -232,14 +225,13 @@ func main() {
 	// Change the working directory to the root ("/")
 	if err := os.Chdir("/"); err != nil {
 		log.Fatalf("Error changing working directory: %v", err)
-		os.Exit(1)
 	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	fmt.Println("Server will shut down")
+	log.Println("Server will shut down")
 	server.Stop()
-	fmt.Println("Server is shut down")
+	log.Println("Server is shut down")
 }

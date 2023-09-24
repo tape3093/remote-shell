@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	HOST      = "localhost"
-	PORT      = "12345"
-	TYPE      = "tcp"
-	CERT_FILE = "./cert/client-cert.pem"
-	KEY_FILE  = "./cert/client-key.pem"
-	CA_FILE   = "./cert/ca-cert.pem"
+	host           = "localhost"
+	port           = "12345"
+	connectionType = "tcp"
+	certFile       = "./cert/client-cert.pem"
+	keyFile        = "./cert/client-key.pem"
+	caFile         = "./cert/ca-cert.pem"
 )
 
 type Client struct {
@@ -28,13 +28,11 @@ type Client struct {
 func NewClient(address string) (*Client, error) {
 	tlsConfig, err := LoadCertificates()
 	if err != nil {
-		log.Printf("Error loading certificates: %v", err)
 		return nil, err
 	}
 
-	conn, err := tls.Dial(TYPE, address, tlsConfig)
+	conn, err := tls.Dial(connectionType, address, tlsConfig)
 	if err != nil {
-		log.Printf("Error establishing client-server connection: %v", err)
 		return nil, err
 	}
 
@@ -44,15 +42,13 @@ func NewClient(address string) (*Client, error) {
 }
 
 func LoadCertificates() (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(CERT_FILE, KEY_FILE)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.Printf("Error while loading certificate and key: %v", err)
 		return nil, err
 	}
 
-	authority, err := os.ReadFile(CA_FILE)
+	authority, err := os.ReadFile(caFile)
 	if err != nil {
-		log.Printf("Error loading CA certificate: %v", err)
 		return nil, err
 	}
 
@@ -67,18 +63,11 @@ func LoadCertificates() (*tls.Config, error) {
 }
 
 func (c *Client) SendCommand(command string) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Connection to server closed: %v", r)
-			os.Exit(1)
-		}
-	}()
-
 	_, err := fmt.Fprintf(c.connection, command+"\n")
 	if err != nil {
 		if err != nil && strings.Contains(err.Error(), "broken pipe") {
 			// Server closed the connection, trigger a panic.
-			panic(err)
+			log.Fatal("Connection to server closed")
 		}
 		log.Printf("Error while sending command: %v", err)
 	}
@@ -89,9 +78,7 @@ func (c *Client) ReceiveResponse() {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
+			if err != io.EOF {
 				log.Printf("Error while reading response: %v", err)
 			}
 			break
@@ -100,10 +87,8 @@ func (c *Client) ReceiveResponse() {
 		// Check for EOF marker
 		if line == "EOF\n" {
 			break
-		}
-		if line == "TERMINATE\n" {
+		} else if line == "TERMINATE\n" {
 			os.Exit(9)
-			return
 		}
 
 		fmt.Print(line)
@@ -115,10 +100,9 @@ func (c *Client) Close() {
 }
 
 func main() {
-	client, err := NewClient(HOST + ":" + PORT)
+	client, err := NewClient(host + ":" + port)
 	if err != nil {
 		log.Fatalf("Error trying to create client: %v", err)
-		os.Exit(1)
 	}
 	defer client.Close()
 
